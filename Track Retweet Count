@@ -1,0 +1,74 @@
+from tweepy.streaming import StreamListener
+from tweepy import OAuthHandler
+from tweepy import Stream
+import pymysql
+import json
+from datetime import datetime
+import os
+import tweepy
+from sched import scheduler
+from time import time, sleep
+
+
+
+s = scheduler(time, sleep)
+
+def run_periodically(start, end, interval, func):
+    event_time = start
+    while event_time < end:
+        s.enterabs(event_time, 0, func, ())
+        event_time += interval
+    s.run()
+
+if __name__ == '__main__':
+    all_tweet_ids=[0]*100 #initialize list of tweet ids
+
+    def fetch(): #function to repeat 
+        if all_tweet_ids[1]==0: #Check to see that only one ID has been captured
+            j=0
+        else:
+            j=sum(x > 0 for x in all_tweet_ids) #set current id index
+        consumer_key = ''
+        consumer_secret = ''
+        access_token = '-'
+        access_token_secret = ''
+
+
+        auth = OAuthHandler(consumer_key, consumer_secret)
+        auth.set_access_token(access_token, access_token_secret)
+
+        api = tweepy.API(auth)
+
+        tweets = api.user_timeline(id=25073877,count=1) #find latest tweet
+        for tweet in tweets:
+          print tweet.id, " : ", tweet.text
+          tweet_id=tweet.id #save most recent tweet id
+          tweet_text=tweet.text
+          print tweet_id
+        if all_tweet_ids[0] == 0: #insert first tweet id
+            all_tweet_ids.insert(0, tweet_id)
+        if all_tweet_ids[j] != tweet_id: #see if new tweet has been tweeted
+            all_tweet_ids.insert(j+1, tweet_id) #add new tweet id to tweet list
+            j=j+1
+            print all_tweet_ids
+
+        i=0
+
+        while all_tweet_ids[i]!=0: #update all retweet counts for all tweet ids
+            results = api.retweets(all_tweet_ids[i],count=1)
+            for retweet in results:
+                print retweet.retweet_count
+                retweetcount=retweet.retweet_count
+
+            time = datetime.now()
+
+
+            text_file = open("tweepy_with_timeline.txt", "a")
+
+            text_file.write("%s" % time+'\t')
+            text_file.write("%s" % all_tweet_ids[i]+'\t') 
+            text_file.write("%s" % retweetcount+'\n')
+            text_file.close()
+            i=i+1
+
+    run_periodically(time()+5, time()+36000, 120, fetch)
